@@ -5,7 +5,7 @@ Defines all request/response models used throughout the pipeline.
 These schemas enforce data contracts between pipeline stages.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from enum import Enum
 from datetime import datetime
@@ -136,3 +136,44 @@ class HealthResponse(BaseModel):
     tavily_available: bool = False
     qdrant_available: bool = False
     mongodb_available: bool = False
+
+
+# ============================================================
+# Stage 1 + 2 Analysis API
+# ============================================================
+
+class AnalyzeRequest(BaseModel):
+    """Request body for the seminar-demo analysis endpoint."""
+
+    response: str = Field(
+        min_length=1,
+        description="An LLM-generated response to extract claims from.",
+    )
+
+    @field_validator("response")
+    @classmethod
+    def response_must_not_be_blank(cls, value: str) -> str:
+        """Reject whitespace-only requests before invoking ML services."""
+        if not value.strip():
+            raise ValueError("response must not be blank")
+        return value
+
+
+class AnalyzedClaim(Claim):
+    """An extracted claim with evidence and verification results."""
+
+    evidence: list[Evidence] = Field(default_factory=list)
+    status: ClaimStatus = ClaimStatus.UNCERTAIN
+    confidence: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+    )
+    nli_label: Optional[str] = None
+
+
+class AnalyzeResponse(BaseModel):
+    """Output from the combined Stage 1 and Stage 2 prototype."""
+
+    original_response: str
+    claims: list[AnalyzedClaim] = Field(default_factory=list)

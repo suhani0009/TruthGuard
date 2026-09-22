@@ -2,7 +2,6 @@
 
 from app.retrieval.vector_store import KnowledgeDocument
 
-
 SAMPLE_KNOWLEDGE_BASE: tuple[KnowledgeDocument, ...] = (
     KnowledgeDocument(
         text="Google was founded in 1998 by Larry Page and Sergey Brin.",
