@@ -1,8 +1,7 @@
-"""Seminar-demo orchestration for claim extraction, retrieval, and verification."""
+
+"""Orchestration for claim extraction, web evidence retrieval, and verification."""
 
 from __future__ import annotations
-
-from threading import Lock
 
 from app.config import Settings
 from app.models.claim_extractor import ClaimExtractor
@@ -13,22 +12,21 @@ from app.models.schemas import (
 )
 from app.retrieval.embedding_service import EmbeddingService
 from app.retrieval.evidence_retriever import EvidenceRetriever
-from app.retrieval.sample_knowledge_base import SAMPLE_KNOWLEDGE_BASE
+from app.retrieval.tavily_search_service import TavilySearchService
 from app.retrieval.vector_store import QdrantVectorStore
 from app.verification.nli_service import NLIService
 from app.verification.verification_service import VerificationService
 
 
 class AnalysisService:
-    """Connect claim extraction, evidence retrieval, and NLI verification."""
+    """Connect claim extraction, web evidence retrieval, and NLI verification."""
 
     def __init__(self, settings: Settings | None = None) -> None:
         self._settings = settings
         self._claim_extractor: ClaimExtractor | None = None
         self._evidence_retriever: EvidenceRetriever | None = None
         self._verification_service: VerificationService | None = None
-        self._knowledge_base_ready = False
-        self._initialization_lock = Lock()
+        self._tavily_service: TavilySearchService | None = None
 
     @property
     def settings(self) -> Settings:
@@ -36,23 +34,44 @@ class AnalysisService:
             from app.config import settings
 
             self._settings = settings
+
         return self._settings
 
     @property
     def claim_extractor(self) -> ClaimExtractor:
         if self._claim_extractor is None:
-            self._claim_extractor = ClaimExtractor(settings=self.settings)
+            self._claim_extractor = ClaimExtractor(
+                settings=self.settings
+            )
+
         return self._claim_extractor
+
+    @property
+    def tavily_service(self) -> TavilySearchService:
+        if self._tavily_service is None:
+            self._tavily_service = TavilySearchService(
+                settings=self.settings
+            )
+
+        return self._tavily_service
 
     @property
     def evidence_retriever(self) -> EvidenceRetriever:
         if self._evidence_retriever is None:
-            embeddings = EmbeddingService(settings=self.settings)
+            embeddings = EmbeddingService(
+                settings=self.settings
+            )
+
             vector_store = QdrantVectorStore(
                 embedding_service=embeddings,
                 settings=self.settings,
             )
-            self._evidence_retriever = EvidenceRetriever(vector_store)
+
+            self._evidence_retriever = EvidenceRetriever(
+                vector_store=vector_store,
+                tavily_service=self.tavily_service,
+            )
+
         return self._evidence_retriever
 
     @property
@@ -62,30 +81,31 @@ class AnalysisService:
                 evidence_retriever=self.evidence_retriever,
                 nli_service=NLIService(),
             )
+
         return self._verification_service
 
-    def _ensure_sample_knowledge_base(self) -> None:
-        """Populate the in-memory demo collection exactly once per process."""
-        if self._knowledge_base_ready:
-            return
-
-        with self._initialization_lock:
-            if not self._knowledge_base_ready:
-                self.evidence_retriever.ingest_documents(
-                    SAMPLE_KNOWLEDGE_BASE
-                )
-                self._knowledge_base_ready = True
-
     async def analyze(self, response_text: str) -> AnalyzeResponse:
-        """Run extraction → retrieval → NLI verification."""
+        """Run extraction → real web retrieval → NLI verification."""
 
-        extraction = await self.claim_extractor.extract(response_text)
-
-        self._ensure_sample_knowledge_base()
+        extraction = await self.claim_extractor.extract(
+            response_text
+        )
 
         analyzed_claims: list[AnalyzedClaim] = []
 
         for claim in extraction.claims:
+            # Step 2: Search the real web through Tavily.
+            web_documents = self.evidence_retriever.search_web(
+                claim,
+                max_results=self.settings.top_k_results,
+            )
+
+            # Store the retrieved web evidence in Qdrant.
+            self.evidence_retriever.ingest_documents(
+                web_documents
+            )
+
+            # Step 3: Retrieve relevant evidence and verify with NLI.
             verification = self.verification_service.verify_claim(
                 claim,
                 top_k=self.settings.top_k_results,
