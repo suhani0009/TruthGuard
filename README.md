@@ -1,61 +1,160 @@
-# TruthLens
+# TruthGuard
 
-TruthLens is a final-year-project prototype for inspecting factual claims in an AI-generated response and retrieving related evidence.
+**Evidence-Based Correction for Trustworthy LLMs**
 
-## Current prototype
+TruthGuard is a final-year project prototype that checks factual claims made by Large Language Models (LLMs) using external web evidence.
 
-The seminar build implements only:
+## Current Prototype
 
-1. Claim extraction (Stage 1)
-2. BGE embeddings and Qdrant evidence retrieval (Stage 2)
-3. FastAPI and a React interface for displaying claims and evidence
+The current backend implements:
 
-Verification, trust scores, correction, Tavily, and MongoDB are intentionally not implemented yet.
+1. Claim extraction
+2. Web evidence search using Tavily
+3. BGE embeddings for semantic search
+4. Qdrant evidence retrieval
+5. Evidence focusing
+6. DeBERTa-v3-MNLI verification
+7. Claim classification:
+   - Supported
+   - Contradicted
+   - Uncertain
+8. Overall trust score calculation
+9. Correction for contradicted claims
+10. FastAPI backend
+11. Automated backend tests
 
-## Start the backend
+A React/Vite frontend is also included for displaying the verification results.
 
-From the project root, activate the Python environment and run:
+## System Flow
 
-```powershell
-cd "C:\Users\SUHANI\.cagent\Desktop\Final Year Project\New folder"
-.\.venv\Scripts\Activate.ps1
-cd backend
-python -m uvicorn app.main:app --reload
+LLM Response  
+↓  
+Claim Extraction  
+↓  
+Tavily Web Search  
+↓  
+BGE Embeddings + Qdrant  
+↓  
+Relevant Evidence  
+↓  
+Evidence Focusing  
+↓  
+DeBERTa NLI Verification  
+↓  
+Supported / Contradicted / Uncertain  
+↓  
+Trust Score + Correction  
+↓  
+Frontend
 
+## Technologies Used
 
-pytest tests/test_verification_service.py -q -s
-curl -X POST "http://127.0.0.1:8000/api/analyze" -H "Content-Type: application/json" -d "{\"response\":\"Google was founded in 1999.\"}"
-```
+### Backend
 
-The API is available at `http://localhost:8000`.
+- Python
+- FastAPI
+- Tavily
+- Sentence Transformers
+- BAAI/bge-small-en-v1.5
+- Qdrant
+- DeBERTa-v3-MNLI
+- Pytest
 
-- `GET /api/health`
-- `POST /api/analyze` with `{ "response": "..." }`
+### Frontend
 
-## Start the frontend
+- React
+- Vite
+- JavaScript
 
-In a second terminal:
-
-```powershell
-cd frontend
-npm run dev
-
-
-npm install
-```
-
-Open `http://localhost:5173`.
-
-## Demo input
+## Project Structure
 
 ```text
-Google was founded in 1999. The Earth revolves around the Sun.
-```
+TruthGuard/
+├── backend/
+│   ├── app/
+│   ├── tests/
+│   ├── .env.example
+│   └── requirements.txt
+│
+├── frontend/
+│   ├── src/
+│   ├── package.json
+│   └── package-lock.json
+│
+├── .gitignore
+└── README.md
 
-The Google claim retrieves the local evidence stating that Google was founded in 1998; the Earth claim retrieves the matching Earth-orbit evidence.
+Backend Setup
+Create a Python virtual environment:
+python -m venv .venv
 
-## Tests
+Activate it on Windows:
+.venv\Scripts\activate
 
-```powershell
-.\.venv\Scripts\python.exe -m pytest backend/tests -q
-```
+Install dependencies:
+pip install -r backend/requirements.txt
+
+Create:
+backend/.env
+
+Add the required API keys using backend/.env.example as a reference.
+Do not upload .env or API keys to GitHub.
+Start the Backend
+From the project root:
+uvicorn backend.app.main:app --reload
+
+Backend:
+http://localhost:8000
+
+API Endpoints
+GET  /api/health
+POST /api/analyze
+
+Example request:
+{
+  "response": "Google was founded in 1999."
+}
+
+Start the Frontend
+Open a second terminal:
+cd frontend
+npm install
+npm run dev
+
+Frontend:
+http://localhost:5173
+
+Example
+Input
+Google was founded in 1999.
+The Earth revolves around the Sun.
+
+Verification
+Google was founded in 1999.
+→ CONTRADICTED
+
+The Earth revolves around the Sun.
+→ SUPPORTED
+
+For contradicted claims, TruthGuard attempts to provide an evidence-based correction.
+Trust Score
+The current trust score mapping is:
+SUPPORTED     → 1.0
+UNCERTAIN     → 0.5
+CONTRADICTED  → 0.0
+
+The average score is converted into a percentage.
+Testing
+Run the backend tests:
+pytest backend/tests -q
+
+Current test status:
+83 tests passed
+Known Limitations
+- Web search can sometimes return irrelevant evidence.
+- Irrelevant evidence can occasionally produce an incorrect high-confidence NLI result.
+- Evidence quality and source reliability need further improvement.
+- Correction generation can fail if the LLM service is unavailable.
+- Frontend integration and user experience are still being developed.
+Project Goal
+The goal of TruthGuard is to identify and correct factual errors in LLM-generated responses using external evidence and verification rather than relying only on another LLM to judge the response.
