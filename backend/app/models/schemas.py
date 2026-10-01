@@ -160,7 +160,7 @@ class AnalyzeRequest(BaseModel):
 
 
 class AnalyzedClaim(Claim):
-    """An extracted claim with evidence and verification results."""
+    """An extracted claim with evidence, verification, and correction."""
 
     evidence: list[Evidence] = Field(default_factory=list)
     status: ClaimStatus = ClaimStatus.UNCERTAIN
@@ -170,10 +170,20 @@ class AnalyzedClaim(Claim):
         le=1.0,
     )
     nli_label: Optional[str] = None
+    corrected_text: Optional[str] = Field(
+        default=None,
+        description="Evidence-based correction for a contradicted claim.",
+    )
 
 
 class AnalyzeResponse(BaseModel):
-    """Output from the combined Stage 1 and Stage 2 prototype."""
+    """Output from the combined Stage 1 through Stage 4 pipeline."""
 
     original_response: str
     claims: list[AnalyzedClaim] = Field(default_factory=list)
+    overall_trust_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=100.0,
+        description="Mean of claim scores: supported=1, uncertain=0.5, contradicted=0.",
+    )

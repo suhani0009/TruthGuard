@@ -146,7 +146,10 @@ def test_invalid_max_results_is_rejected() -> None:
 
 
 def test_missing_tavily_key_raises_clear_error() -> None:
-    settings = Settings(llm_api_key="")
+    settings = Settings(
+      _env_file=None,
+      llm_api_key="",
+   )
 
     service = TavilySearchService(settings=settings)
 

@@ -311,7 +311,10 @@ class TestConfig:
 
     def test_default_settings(self):
         """Default settings should load without errors."""
-        settings = Settings(llm_api_key="")
+        settings = Settings(
+         _env_file=None,
+        llm_api_key="",
+        )
         assert settings.llm_model == "gpt-3.5-turbo"
         assert settings.embedding_model == "BAAI/bge-small-en-v1.5"
 
@@ -331,9 +334,13 @@ class TestConfig:
         assert settings.llm_available is True
 
     def test_tavily_not_available_by_default(self):
-        """Tavily should be unavailable when key is not set."""
-        settings = Settings(llm_api_key="")
-        assert settings.tavily_available is False
+       """Tavily should be unavailable when key is not set."""
+       settings = Settings(
+          _env_file=None,
+          llm_api_key="",
+        )
+
+       assert settings.tavily_available is False
 
     def test_mongodb_not_available_by_default(self):
         """MongoDB should be unavailable when URI is not set."""

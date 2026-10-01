@@ -12,6 +12,7 @@ build/
 # Virtual environments
 venv/
 .venv/
+.venv-1/
 env/
 
 # Environment variables
@@ -31,7 +32,6 @@ Thumbs.db
 
 # Node
 node_modules/
-frontend/node_modules/
 
 # Build output
 frontend/dist/

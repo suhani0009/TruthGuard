@@ -5,7 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.models.schemas import Claim, Evidence
+from app.retrieval.embedding_service import EmbeddingService
 from app.retrieval.evidence_retriever import EvidenceRetriever
+from app.verification.evidence_focus_service import EvidenceFocusService
 from app.verification.nli_service import NLIService
 
 
@@ -27,7 +29,6 @@ class ClaimVerification:
     results: list[EvidenceVerification]
 
 
-# ADD THIS HERE
 @dataclass(frozen=True)
 class ClaimDecision:
     """Final verification decision for one claim."""
@@ -46,9 +47,16 @@ class VerificationService:
         self,
         evidence_retriever: EvidenceRetriever,
         nli_service: NLIService,
+        embedding_service: EmbeddingService | None = None,
     ) -> None:
         self._evidence_retriever = evidence_retriever
         self._nli_service = nli_service
+        if embedding_service is None:
+           embedding_service = EmbeddingService()
+
+        self._evidence_focus_service = EvidenceFocusService(
+           embedding_service
+    )
 
     def verify_claim(
         self,
@@ -65,9 +73,15 @@ class VerificationService:
         results = []
 
         for evidence in evidence_list:
+            focused_evidence = self._evidence_focus_service.focus(
+                claim=claim.text,
+                evidence=evidence,
+                max_sentences=2,
+            )
+
             nli_result = self._nli_service.verify(
                 claim=claim.text,
-                evidence=evidence.text,
+                evidence=focused_evidence.text,
             )
 
             results.append(
@@ -84,7 +98,6 @@ class VerificationService:
             results=results,
         )
 
-    # ADD THIS FUNCTION HERE
     def decide_claim(
         self,
         verification: ClaimVerification,
@@ -94,25 +107,62 @@ class VerificationService:
         if not verification.results:
             return ClaimDecision(
                 claim=verification.claim,
-                status="INSUFFICIENT_EVIDENCE",
+                status="UNCERTAIN",
                 confidence=0.0,
                 nli_label=None,
                 evidence=None,
             )
 
-        # Select the strongest NLI result.
-        best_result = max(
-            verification.results,
-            key=lambda result: result.evidence.similarity_score,
-        )
+        print("\n" + "=" * 70)
+        print(f"CLAIM: {verification.claim.text}")
 
-        status_map = {
-            "entailment": "SUPPORTED",
-            "contradiction": "CONTRADICTED",
-            "neutral": "INSUFFICIENT_EVIDENCE",
-        }
+        for index, result in enumerate(verification.results, start=1):
+            print(f"\nEvidence {index}:")
+            print(
+                f"Similarity: "
+                f"{result.evidence.similarity_score:.4f}"
+            )
+            print(f"NLI label: {result.label}")
+            print(
+                f"NLI confidence: "
+                f"{result.confidence:.4f}"
+            )
+            print(f"NLI scores: {result.scores}")
+            print(f"Source: {result.evidence.source}")
 
-        status = status_map[best_result.label]
+        # Prefer strong NLI decisions over embedding similarity.
+        contradictions = [
+            result
+            for result in verification.results
+            if result.label == "contradiction"
+        ]
+
+        entailments = [
+            result
+            for result in verification.results
+            if result.label == "entailment"
+        ]
+
+        if contradictions:
+            best_result = max(
+                contradictions,
+                key=lambda result: result.confidence,
+            )
+            status = "CONTRADICTED"
+
+        elif entailments:
+            best_result = max(
+                entailments,
+                key=lambda result: result.confidence,
+            )
+            status = "SUPPORTED"
+
+        else:
+            best_result = max(
+                verification.results,
+                key=lambda result: result.confidence,
+            )
+            status = "UNCERTAIN"
 
         return ClaimDecision(
             claim=verification.claim,

@@ -99,7 +99,7 @@ def test_retrieval_plus_nli(
         ),
         (
             "Google has offices in Paris.",
-            "INSUFFICIENT_EVIDENCE",
+            "UNCERTAIN",
         ),
     ],
 )

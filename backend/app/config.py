@@ -35,7 +35,7 @@ class Settings(BaseSettings):
 
     # --- NLI Verification Model ---
     nli_model: str = Field(
-        default="cross-encoder/nli-deberta-v3-xsmall",
+        default="cross-encoder/nli-deberta-v3-base",
         description="Cross-encoder model for NLI-based claim verification.",
     )
 

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from threading import Lock
+from typing import Any, ClassVar
 
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
@@ -28,6 +29,8 @@ class NLIService:
         1: "entailment",
         2: "neutral",
     }
+    _pretrained_components: ClassVar[dict[str, tuple[Any, Any]]] = {}
+    _components_lock: ClassVar[Lock] = Lock()
 
     def __init__(
         self,
@@ -37,15 +40,29 @@ class NLIService:
     ) -> None:
         self.model_name = model_name or self.MODEL_NAME
 
-        self.tokenizer = tokenizer or AutoTokenizer.from_pretrained(
-            self.model_name
-        )
-
-        self.model = model or AutoModelForSequenceClassification.from_pretrained(
-            self.model_name
-        )
+        if tokenizer is not None or model is not None:
+            self.tokenizer = tokenizer or AutoTokenizer.from_pretrained(self.model_name)
+            self.model = model or AutoModelForSequenceClassification.from_pretrained(
+                self.model_name
+            )
+        else:
+            self.tokenizer, self.model = self._get_pretrained_components()
 
         self.model.eval()
+
+    def _get_pretrained_components(self) -> tuple[Any, Any]:
+        """Load each configured DeBERTa model once per application process."""
+        with self._components_lock:
+            components = self._pretrained_components.get(self.model_name)
+            if components is None:
+                components = (
+                    AutoTokenizer.from_pretrained(self.model_name),
+                    AutoModelForSequenceClassification.from_pretrained(
+                        self.model_name
+                    ),
+                )
+                self._pretrained_components[self.model_name] = components
+            return components
 
     def verify(self, claim: str, evidence: str) -> NLIResult:
         """Determine whether evidence entails, contradicts, or is neutral to a claim."""
