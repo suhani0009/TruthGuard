@@ -4,12 +4,12 @@ TruthLens Configuration.
 Loads settings from environment variables / .env file using Pydantic Settings.
 All external service credentials are configured here.
 """
-
+from pathlib import Path
 from pydantic_settings import BaseSettings
 from pydantic import Field
 from typing import Optional
 
-
+BASE_DIR = Path(__file__).resolve().parents[1]
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
@@ -88,7 +88,7 @@ class Settings(BaseSettings):
     )
 
     model_config = {
-        "env_file": ".env",
+        "env_file": str(BASE_DIR / ".env"),
         "env_file_encoding": "utf-8",
         "case_sensitive": False,
         "extra": "ignore",

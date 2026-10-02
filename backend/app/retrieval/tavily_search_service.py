@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+import httpx
+
 from app.config import Settings
 
 
@@ -17,7 +19,9 @@ class TavilySearchResult:
 
 
 class TavilySearchService:
-    """Search the web through Tavily and normalize the results."""
+    """Search the web through Tavily's HTTP API and normalize the results."""
+
+    TAVILY_API_URL = "https://api.tavily.com/search"
 
     def __init__(
         self,
@@ -29,7 +33,7 @@ class TavilySearchService:
 
     @property
     def client(self) -> Any:
-        """Create the Tavily client lazily."""
+        """Return the Tavily API key."""
 
         if self._client is None:
             if not self.settings.tavily_available:
@@ -38,11 +42,7 @@ class TavilySearchService:
                     "Set TAVILY_API_KEY in the environment."
                 )
 
-            from tavily import TavilyClient
-
-            self._client = TavilyClient(
-                api_key=self.settings.tavily_api_key
-            )
+            self._client = self.settings.tavily_api_key
 
         return self._client
 
@@ -51,7 +51,7 @@ class TavilySearchService:
         query: str,
         max_results: int = 5,
     ) -> list[TavilySearchResult]:
-        """Search Tavily and return normalized web results."""
+        """Search Tavily through its REST API."""
 
         if not query or not query.strip():
             raise ValueError("Search query cannot be empty.")
@@ -59,17 +59,39 @@ class TavilySearchService:
         if max_results < 1:
             raise ValueError("max_results must be at least 1.")
 
-        response = self.client.search(
-            query=query.strip(),
-            search_depth="advanced",
-            max_results=max_results,
-            include_answer=False,
-            include_raw_content=False,
-        )
+        payload = {
+            "api_key": self.client,
+            "query": query.strip(),
+            "search_depth": "advanced",
+            "max_results": max_results,
+            "include_answer": False,
+            "include_raw_content": False,
+        }
+
+        try:
+            response = httpx.post(
+                self.TAVILY_API_URL,
+                json=payload,
+                timeout=30.0,
+            )
+            response.raise_for_status()
+
+        except httpx.HTTPStatusError as exc:
+            raise RuntimeError(
+                f"Tavily search failed with HTTP "
+                f"{exc.response.status_code}: {exc.response.text}"
+            ) from exc
+
+        except httpx.RequestError as exc:
+            raise RuntimeError(
+                f"Could not connect to Tavily: {exc}"
+            ) from exc
+
+        data = response.json()
 
         results: list[TavilySearchResult] = []
 
-        for item in response.get("results", []):
+        for item in data.get("results", []):
             title = str(item.get("title", "")).strip()
             url = str(item.get("url", "")).strip()
             content = str(item.get("content", "")).strip()
